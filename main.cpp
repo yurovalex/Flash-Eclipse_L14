@@ -102,16 +102,51 @@ private:
     #version 330 core
     out vec4 FragColor;
     uniform vec4 ourColor;
-    uniform vec2 iResolution;
+    uniform vec2 u_resolution;
+    uniform float u_time;
 
-    void main()
-    {
-     vec2 st = gl_FragCoord.xy/iResolution;
-     float pct = 0.0;
-     pct = distance(st,vec2(0.5));
-     vec3 color = vec3(pct);
-     color.x = clamp(color.z,0,1);
-     FragColor = ourColor + vec4(color, 1.0 );
+// Redefine below to see the tiling...
+//#define SHOW_TILING
+
+
+void main()
+{
+    float TAU = 6.28318530718;
+    int MAX_ITER = 5;
+    float time = u_time * .5+23.0;
+    // uv should be the 0-1 uv of texture...
+    vec2 uv = gl_FragCoord.xy / u_resolution.xy;
+
+#ifdef SHOW_TILING
+        vec2 p = mod(uv*TAU*2.0, TAU)-250.0;
+#else
+    vec2 p = mod(uv*TAU, TAU)-250.0;
+#endif
+        vec2 i = vec2(p);
+        float c = 1.0;
+        float inten = .005;
+
+        for (int n = 0; n < MAX_ITER; n++)
+        {
+                float t = time * (1.0 - (3.5 / float(n+1)));
+                i = p + vec2(cos(t - i.x) + sin(t + i.y), sin(t - i.y) + cos(t + i.x));
+                c += 1.0/length(vec2(p.x / (sin(i.x+t)/inten),p.y / (cos(i.y+t)/inten)));
+        }
+        c /= float(MAX_ITER);
+        c = 1.17-pow(c, 1.4);
+        vec3 colour = vec3(pow(abs(c), 8.0));
+    colour = clamp(colour + vec3(ourColor.xyz), 0.0, 1.0);
+
+        #ifdef SHOW_TILING
+        // Flash tile borders...
+        vec2 pixel = 2.0 / u_resolution.xy;
+        uv *= 2.0;
+        float f = floor(mod(u_time*.5, 2.0)); 	    // Flash value.
+        vec2 first = step(pixel, uv) * f;		   	// Rule out first screen pixels and flash.
+        uv  = step(fract(uv), pixel);				// Add one line of pixels per tile.
+        colour = mix(colour, vec3(1.0, 1.0, 0.0), (uv.x + uv.y) * first.x * first.y); // Yellow line
+        #endif
+        FragColor = vec4(colour, 1.0);
     }
 )";
 
@@ -270,9 +305,11 @@ int main()
         double  timeValue = glfwGetTime();
         float greenValue = static_cast<float>(sin(timeValue) / 2.0 + 0.5);
         int vertexColorLocation = glGetUniformLocation(obj.GetShaderProgram(), "ourColor");
-        int resScreen = glGetUniformLocation(obj.GetShaderProgram(), "iResolution");
+        int resScreen = glGetUniformLocation(obj.GetShaderProgram(), "u_resolution");
+        int countTime = glGetUniformLocation(obj.GetShaderProgram(), "u_time");
         glUniform4f(vertexColorLocation, myGUI.GetParam().valueRed, greenValue, myGUI.GetParam().valueBlue, 1.0f);
         glUniform2f(resScreen,SCR_WIDTH, SCR_HEIGHT);
+        glUniform1f (countTime,timeValue);
         // render the triangle
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
